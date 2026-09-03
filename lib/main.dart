@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'routes/app_router.dart';
 import 'theme/app_theme.dart';
 
+//initial page route
 void main() {
   runApp(const ProviderScope(child: BISSahayakApp()));
 }
