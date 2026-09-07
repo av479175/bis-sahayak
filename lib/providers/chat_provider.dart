@@ -14,6 +14,7 @@ const _uuid = Uuid();
 /// POST /conversations. Every sendMessage() call hits real POST /chat.
 class ChatController extends AsyncNotifier<List<ChatMessage>> {
   String? _conversationId;
+  String? get conversationId => _conversationId;
 
   @override
   Future<List<ChatMessage>> build() async {
@@ -30,10 +31,10 @@ class ChatController extends AsyncNotifier<List<ChatMessage>> {
       } else {
         final created = await convoRepo.createConversation();
         _conversationId = created.id;
+        ref.invalidate(conversationsListProvider);
       }
     } catch (_) {
-      // Not logged in yet / backend cold-starting — still show a welcome
-      // message; sendMessage() will retry creating a conversation.
+      // Offline / not logged in — show welcome message
     }
     return [_welcomeMessage()];
   }
@@ -52,6 +53,34 @@ class ChatController extends AsyncNotifier<List<ChatMessage>> {
         text: m.content,
         timestamp: m.createdAt ?? DateTime.now(),
       );
+
+  Future<void> startNewChat() async {
+    state = const AsyncLoading();
+    try {
+      final created = await ref.read(conversationRepositoryProvider).createConversation();
+      _conversationId = created.id;
+      ref.invalidate(conversationsListProvider);
+      state = AsyncData([_welcomeMessage()]);
+    } catch (_) {
+      _conversationId = null;
+      state = AsyncData([_welcomeMessage()]);
+    }
+  }
+
+  Future<void> loadConversation(String id) async {
+    _conversationId = id;
+    state = const AsyncLoading();
+    try {
+      final history = await ref.read(conversationRepositoryProvider).getMessages(id);
+      if (history.isNotEmpty) {
+        state = AsyncData(history.map(_toChatMessage).toList());
+      } else {
+        state = AsyncData([_welcomeMessage()]);
+      }
+    } catch (_) {
+      state = AsyncData([_welcomeMessage()]);
+    }
+  }
 
   Future<void> sendMessage(String text) async {
     final trimmed = text.trim();
@@ -89,6 +118,7 @@ class ChatController extends AsyncNotifier<List<ChatMessage>> {
         updated[idx] = loadingMessage.copyWith(text: reply.answer, isLoading: false, sources: reply.sources);
       }
       state = AsyncData(updated);
+      ref.invalidate(conversationsListProvider);
     } catch (e) {
       final updated = <ChatMessage>[...state.valueOrNull ?? []];
       final idx = updated.indexWhere((m) => m.id == loadingMessage.id);
@@ -105,6 +135,7 @@ class ChatController extends AsyncNotifier<List<ChatMessage>> {
   Future<String?> _ensureConversation() async {
     try {
       final created = await ref.read(conversationRepositoryProvider).createConversation();
+      ref.invalidate(conversationsListProvider);
       return created.id;
     } catch (_) {
       return null;
@@ -112,8 +143,7 @@ class ChatController extends AsyncNotifier<List<ChatMessage>> {
   }
 
   void resetChat() {
-    _conversationId = null;
-    ref.invalidateSelf();
+    startNewChat();
   }
 }
 
