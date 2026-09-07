@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:markdown/markdown.dart' as md;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/chat_message.dart';
 import '../theme/app_theme.dart';
@@ -7,7 +9,7 @@ import 'citation_chip.dart';
 
 class ChatBubble extends StatelessWidget {
   final ChatMessage message;
-  final void Function(String standardId) onCitationTap;
+  final ValueChanged<String> onCitationTap;
 
   const ChatBubble({
     super.key,
@@ -22,25 +24,40 @@ class ChatBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: _isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!_isUser) _AiAvatar(),
-          if (!_isUser) const SizedBox(width: 8),
+          if (!_isUser) ...[
+            const CircleAvatar(
+              radius: 16,
+              backgroundColor: AppTheme.primaryBlue,
+              child: Icon(Icons.auto_awesome, size: 16, color: Colors.white),
+            ),
+            const SizedBox(width: 8),
+          ],
           Flexible(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: _isUser ? AppTheme.primaryBlue : Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(16),
-                  topRight: const Radius.circular(16),
-                  bottomLeft: Radius.circular(_isUser ? 16 : 4),
-                  bottomRight: Radius.circular(_isUser ? 4 : 16),
+                borderRadius: BorderRadius.circular(16).copyWith(
+                  bottomRight: _isUser ? const Radius.circular(0) : null,
+                  bottomLeft: !_isUser ? const Radius.circular(0) : null,
                 ),
                 border: _isUser ? null : Border.all(color: Colors.grey.shade200),
+                boxShadow: _isUser
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
               ),
-              child: message.isLoading ? const _TypingIndicator() : _buildContent(context),
+              child: message.isLoading
+                  ? const _TypingIndicator()
+                  : _buildContent(context),
             ),
           ),
           if (_isUser) const SizedBox(width: 8),
@@ -57,84 +74,129 @@ class ChatBubble extends StatelessWidget {
       );
     }
 
-    // AI messages render as markdown, with `bis://` links swapped for
-    // tappable CitationChip widgets via CitationLinkBuilder.
-    return MarkdownBody(
-      data: message.text,
-      selectable: true,
-      onTapLink: (text, href, title) {
-        if (href != null && href.startsWith('bis://')) {
-          onCitationTap(href.substring('bis://'.length));
-        }
-      },
-      builders: {
-        'a': CitationLinkBuilder(onCitationTap: onCitationTap),
-      },
-      styleSheet: MarkdownStyleSheet(
-        p: const TextStyle(fontSize: 14.5, height: 1.45, color: Colors.black87),
-        strong: const TextStyle(fontWeight: FontWeight.w700, color: Colors.black87),
-        listBullet: const TextStyle(fontSize: 14.5, color: Colors.black87),
-        h1: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-        h2: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700),
-        code: TextStyle(
-          backgroundColor: Colors.grey.shade100,
-          fontSize: 13,
-          fontFamily: 'monospace',
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        MarkdownBody(
+          data: message.text,
+          selectable: true,
+          shrinkWrap: true,
+          onTapLink: (text, href, title) {
+            if (href != null && href.startsWith('bis://')) {
+              onCitationTap(href.substring('bis://'.length));
+            }
+          },
+          builders: {'a': CitationLinkBuilder(onCitationTap: onCitationTap)},
+          styleSheet: MarkdownStyleSheet(
+            p: const TextStyle(fontSize: 14.5, height: 1.45, color: Colors.black87),
+            strong: const TextStyle(fontWeight: FontWeight.w700, color: Colors.black87),
+            listBullet: const TextStyle(fontSize: 14.5, color: Colors.black87),
+            h1: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            h2: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700),
+            code: TextStyle(
+              backgroundColor: Colors.grey.shade100,
+              fontSize: 12.5,
+              fontFamily: 'monospace',
+            ),
+            codeblockPadding: const EdgeInsets.all(8),
+            codeblockDecoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+        if (message.sources.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: message.sources.map((s) => _SourceChip(source: s)).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _SourceChip extends StatelessWidget {
+  final String source;
+  const _SourceChip({required this.source});
+
+  bool get _isUrl => source.startsWith('http://') || source.startsWith('https://');
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(6),
+      onTap: _isUrl ? () => launchUrl(Uri.parse(source), mode: LaunchMode.externalApplication) : null,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 240),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(_isUrl ? Icons.open_in_new : Icons.description_outlined, size: 11, color: Colors.grey.shade700),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                source,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _AiAvatar extends StatelessWidget {
+class CitationLinkBuilder extends MarkdownElementBuilder {
+  final ValueChanged<String> onCitationTap;
+
+  CitationLinkBuilder({required this.onCitationTap});
+
   @override
-  Widget build(BuildContext context) {
-    return const CircleAvatar(
-      radius: 14,
-      backgroundColor: AppTheme.primaryBlue,
-      child: Icon(Icons.auto_awesome, size: 14, color: Colors.white),
+  Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
+    final href = element.attributes['href'] ?? '';
+    if (!href.startsWith('bis://')) return null;
+
+    final standardId = href.substring('bis://'.length);
+    final text = element.textContent;
+
+    return CitationChip(
+      label: text,
+      standardId: standardId,
+      onTap: () => onCitationTap(standardId),
     );
   }
 }
 
-class _TypingIndicator extends StatelessWidget {
+class _TypingIndicator extends StatefulWidget {
   const _TypingIndicator();
 
   @override
-  Widget build(BuildContext context) {
-    return const SizedBox(
-      width: 36,
-      height: 16,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _Dot(delayMs: 0),
-          _Dot(delayMs: 150),
-          _Dot(delayMs: 300),
-        ],
-      ),
-    );
-  }
+  State<_TypingIndicator> createState() => _TypingIndicatorState();
 }
 
-class _Dot extends StatefulWidget {
-  final int delayMs;
-  const _Dot({required this.delayMs});
-
-  @override
-  State<_Dot> createState() => _DotState();
-}
-
-class _DotState extends State<_Dot> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
+class _TypingIndicatorState extends State<_TypingIndicator>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
-    Future.delayed(Duration(milliseconds: widget.delayMs), () {
-      if (mounted) _controller.forward(from: 0);
-    });
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
   }
 
   @override
@@ -145,14 +207,31 @@ class _DotState extends State<_Dot> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: Tween(begin: 0.3, end: 1.0).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-      ),
-      child: Container(
-        width: 6,
-        height: 6,
-        decoration: const BoxDecoration(color: AppTheme.primaryBlue, shape: BoxShape.circle),
+    return SizedBox(
+      width: 48,
+      height: 20,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: List.generate(3, (i) {
+          return AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              final value = (_controller.value + (i * 0.2)) % 1.0;
+              final opacity = (value - 0.5).abs() * 2;
+              return Opacity(
+                opacity: 0.3 + (opacity * 0.7),
+                child: Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: AppTheme.primaryBlue,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              );
+            },
+          );
+        }),
       ),
     );
   }

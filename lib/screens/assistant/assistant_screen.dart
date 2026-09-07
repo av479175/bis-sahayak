@@ -1,40 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:uuid/uuid.dart' show Uuid;
 
-import '../../data/mock_chat_data.dart';
-import '../../models/chat_message.dart';
+import '../../providers/chat_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/async_view.dart';
 import '../../widgets/chat_bubble.dart';
 
-/// NOTE: chat state is local (setState) for now, purely to keep this step
-/// self-contained. Step 6 lifts this into a ChatController backed by
-/// Riverpod's AsyncNotifier, exposing loading/error states the same way
-/// `_isSending` does here — the widget tree below barely changes.
-class AssistantScreen extends StatefulWidget {
-  const AssistantScreen({super.key});
+class AssistantScreen extends ConsumerStatefulWidget {
+  final String? conversationId;
+  const AssistantScreen({super.key, this.conversationId});
 
   @override
-  State<AssistantScreen> createState() => _AssistantScreenState();
+  ConsumerState<AssistantScreen> createState() => _AssistantScreenState();
 }
 
-class _AssistantScreenState extends State<AssistantScreen> {
-  static const _uuid = Uuid();
+class _AssistantScreenState extends ConsumerState<AssistantScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
-  final List<ChatMessage> _messages = [];
-  bool _isSending = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _messages.add(ChatMessage(
-      id: _uuid.v4(),
-      sender: MessageSender.ai,
-      text: MockChatData.welcomeMessage,
-      timestamp: DateTime.now(),
-    ));
-  }
 
   @override
   void dispose() {
@@ -54,66 +37,32 @@ class _AssistantScreenState extends State<AssistantScreen> {
     });
   }
 
-  Future<void> _sendMessage() async {
-    final text = _controller.text.trim();
-    if (text.isEmpty || _isSending) return;
-
-    final userMessage = ChatMessage(
-      id: _uuid.v4(),
-      sender: MessageSender.user,
-      text: text,
-      timestamp: DateTime.now(),
-    );
-    final loadingMessage = ChatMessage(
-      id: _uuid.v4(),
-      sender: MessageSender.ai,
-      text: '',
-      timestamp: DateTime.now(),
-      isLoading: true,
-    );
-
-    setState(() {
-      _messages.addAll([userMessage, loadingMessage]);
-      _isSending = true;
-      _controller.clear();
-    });
-    _scrollToBottom();
-
-    final response = await MockChatData.generateResponse(text);
-
-    setState(() {
-      final idx = _messages.indexWhere((m) => m.id == loadingMessage.id);
-      _messages[idx] = loadingMessage.copyWith(text: response, isLoading: false);
-      _isSending = false;
-    });
+  Future<void> _send() async {
+    final text = _controller.text;
+    if (text.trim().isEmpty) return;
+    _controller.clear();
+    await ref.read(chatControllerProvider.notifier).sendMessage(text);
     _scrollToBottom();
   }
 
-  void _onCitationTap(String standardId) {
-    context.push('/standard-details/$standardId');
-  }
+  void _onCitationTap(String standardId) => context.push('/standard-details/$standardId');
 
   @override
   Widget build(BuildContext context) {
+    final messagesAsync = ref.watch(chatControllerProvider);
+    final isSending = ref.watch(isChatSendingProvider);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('BIS Sahayak Assistant'),
+        title: const Text(
+          'BIS Sahayak Assistant',
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           IconButton(
             tooltip: 'New chat',
             icon: const Icon(Icons.add_comment_outlined),
-            onPressed: () {
-              setState(() {
-                _messages
-                  ..clear()
-                  ..add(ChatMessage(
-                    id: _uuid.v4(),
-                    sender: MessageSender.ai,
-                    text: MockChatData.welcomeMessage,
-                    timestamp: DateTime.now(),
-                  ));
-              });
-            },
+            onPressed: () => ref.read(chatControllerProvider.notifier).resetChat(),
           ),
         ],
       ),
@@ -121,20 +70,29 @@ class _AssistantScreenState extends State<AssistantScreen> {
         child: Column(
           children: [
             Expanded(
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                itemCount: _messages.length,
-                itemBuilder: (context, i) => ChatBubble(
-                  message: _messages[i],
-                  onCitationTap: _onCitationTap,
+              child: messagesAsync.when(
+                loading: () => const AsyncLoadingView(label: 'Loading conversation...'),
+                error: (err, st) => AsyncErrorView(
+                  onRetry: () => ref.invalidate(chatControllerProvider),
                 ),
+                data: (messages) {
+                  _scrollToBottom();
+                  return ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                    itemCount: messages.length,
+                    itemBuilder: (context, i) => ChatBubble(
+                      message: messages[i],
+                      onCitationTap: _onCitationTap,
+                    ),
+                  );
+                },
               ),
             ),
             _ChatInputBar(
               controller: _controller,
-              enabled: !_isSending,
-              onSend: _sendMessage,
+              enabled: !isSending,
+              onSend: _send,
             ),
           ],
         ),
@@ -172,8 +130,12 @@ class _ChatInputBar extends StatelessWidget {
               maxLines: 4,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => onSend(),
+              style: const TextStyle(fontSize: 13.5),
               decoration: InputDecoration(
-                hintText: 'Ask about a standard, product, or certification...',
+                hintText: 'Ask about standards, ISI mark, or HUID...',
+                hintMaxLines: 1,
+                hintStyle: TextStyle(fontSize: 12.5, color: Colors.grey.shade500),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,

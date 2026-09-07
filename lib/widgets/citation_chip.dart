@@ -23,24 +23,29 @@ class CitationChip extends StatelessWidget {
       borderRadius: BorderRadius.circular(6),
       onTap: onTap,
       child: Container(
+        constraints: const BoxConstraints(maxWidth: 220),
         margin: const EdgeInsets.symmetric(horizontal: 2),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
-          color: AppTheme.primaryBlue.withOpacity(0.08),
+          color: AppTheme.primaryBlue.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: AppTheme.primaryBlue.withOpacity(0.35)),
+          border: Border.all(color: AppTheme.primaryBlue.withValues(alpha: 0.35)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.link, size: 11, color: AppTheme.primaryBlue),
+            const Icon(Icons.link, size: 11, color: AppTheme.primaryBlue),
             const SizedBox(width: 3),
-            Text(
-              label,
-              style: TextStyle(
-                color: AppTheme.primaryBlue,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppTheme.primaryBlue,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],

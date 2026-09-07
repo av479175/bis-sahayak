@@ -36,7 +36,7 @@ class AppTheme {
           fontWeight: FontWeight.bold,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 0,
         color: Colors.white,
         surfaceTintColor: Colors.transparent,
@@ -48,7 +48,7 @@ class AppTheme {
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: Colors.white,
         elevation: 8,
-        indicatorColor: primaryBlue.withOpacity(0.08),
+        indicatorColor: primaryBlue.withValues(alpha: 0.08),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return const IconThemeData(color: primaryBlue);

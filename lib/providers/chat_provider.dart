@@ -2,65 +2,99 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/chat_message.dart';
+import '../models/conversation.dart';
+import '../network/api_exception.dart';
+import 'conversation_provider.dart';
 import 'repository_providers.dart';
 
 const _uuid = Uuid();
 
-/// Owns the chat transcript. Exposes AsyncValue<List<ChatMessage>> so the UI
-/// shows a full loading/error state only on first load (session init) —
-/// individual message sends instead update state optimistically and use the
-/// per-message `isLoading` flag, so the transcript never blanks out mid-chat.
+/// Follows the documented flow: on open, GET /conversations — reuse the
+/// most recent one and load its history if it exists, else create one via
+/// POST /conversations. Every sendMessage() call hits real POST /chat.
 class ChatController extends AsyncNotifier<List<ChatMessage>> {
+  String? _conversationId;
+
   @override
   Future<List<ChatMessage>> build() async {
-    final repo = ref.watch(chatRepositoryProvider);
-    return [
-      ChatMessage(
+    try {
+      final convoRepo = ref.read(conversationRepositoryProvider);
+      final existing = await convoRepo.getConversations();
+
+      if (existing.isNotEmpty) {
+        _conversationId = existing.first.id;
+        final history = await convoRepo.getMessages(_conversationId!);
+        if (history.isNotEmpty) {
+          return history.map(_toChatMessage).toList();
+        }
+      } else {
+        final created = await convoRepo.createConversation();
+        _conversationId = created.id;
+      }
+    } catch (_) {
+      // Not logged in yet / backend cold-starting — still show a welcome
+      // message; sendMessage() will retry creating a conversation.
+    }
+    return [_welcomeMessage()];
+  }
+
+  ChatMessage _welcomeMessage() => ChatMessage(
         id: _uuid.v4(),
         sender: MessageSender.ai,
-        text: repo.welcomeMessage,
+        text: "Namaste! I'm BIS Sahayak — ask me about product certification, "
+            "hallmarking, or any Indian Standard.",
         timestamp: DateTime.now(),
-      ),
-    ];
-  }
+      );
+
+  ChatMessage _toChatMessage(ConversationMessage m) => ChatMessage(
+        id: m.id.isNotEmpty ? m.id : _uuid.v4(),
+        sender: m.role == 'user' ? MessageSender.user : MessageSender.ai,
+        text: m.content,
+        timestamp: m.createdAt ?? DateTime.now(),
+      );
 
   Future<void> sendMessage(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
 
+    _conversationId ??= await _ensureConversation();
     final current = state.valueOrNull ?? [];
-    final userMessage = ChatMessage(
-      id: _uuid.v4(),
-      sender: MessageSender.user,
-      text: trimmed,
-      timestamp: DateTime.now(),
-    );
-    final loadingMessage = ChatMessage(
-      id: _uuid.v4(),
-      sender: MessageSender.ai,
-      text: '',
-      timestamp: DateTime.now(),
-      isLoading: true,
-    );
 
+    if (_conversationId == null) {
+      state = AsyncData([
+        ...current,
+        ChatMessage(id: _uuid.v4(), sender: MessageSender.user, text: trimmed, timestamp: DateTime.now()),
+        ChatMessage(
+          id: _uuid.v4(),
+          sender: MessageSender.ai,
+          text: "I couldn't start a conversation. Please make sure you're logged in and try again.",
+          timestamp: DateTime.now(),
+        ),
+      ]);
+      return;
+    }
+
+    final userMessage = ChatMessage(id: _uuid.v4(), sender: MessageSender.user, text: trimmed, timestamp: DateTime.now());
+    final loadingMessage = ChatMessage(id: _uuid.v4(), sender: MessageSender.ai, text: '', timestamp: DateTime.now(), isLoading: true);
     state = AsyncData([...current, userMessage, loadingMessage]);
 
     try {
-      final repo = ref.read(chatRepositoryProvider);
-      final response = await repo.sendMessage(trimmed);
-
-      final updated = [...state.valueOrNull ?? []];
+      final reply = await ref.read(chatRepositoryProvider).sendMessage(
+            conversationId: _conversationId!,
+            question: trimmed,
+          );
+      final updated = <ChatMessage>[...state.valueOrNull ?? []];
       final idx = updated.indexWhere((m) => m.id == loadingMessage.id);
       if (idx != -1) {
-        updated[idx] = loadingMessage.copyWith(text: response, isLoading: false);
+        updated[idx] = loadingMessage.copyWith(text: reply.answer, isLoading: false, sources: reply.sources);
       }
       state = AsyncData(updated);
     } catch (e) {
-      final updated = [...state.valueOrNull ?? []];
+      final updated = <ChatMessage>[...state.valueOrNull ?? []];
       final idx = updated.indexWhere((m) => m.id == loadingMessage.id);
       if (idx != -1) {
         updated[idx] = loadingMessage.copyWith(
-          text: "Sorry, I couldn't process that. Please try again.",
+          text: e is ApiException ? e.message : "Sorry, I couldn't process that. Please try again.",
           isLoading: false,
         );
       }
@@ -68,13 +102,23 @@ class ChatController extends AsyncNotifier<List<ChatMessage>> {
     }
   }
 
-  void resetChat() => ref.invalidateSelf();
+  Future<String?> _ensureConversation() async {
+    try {
+      final created = await ref.read(conversationRepositoryProvider).createConversation();
+      return created.id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void resetChat() {
+    _conversationId = null;
+    ref.invalidateSelf();
+  }
 }
 
-final chatControllerProvider =
-    AsyncNotifierProvider<ChatController, List<ChatMessage>>(ChatController.new);
+final chatControllerProvider = AsyncNotifierProvider<ChatController, List<ChatMessage>>(ChatController.new);
 
-/// True while a message is in flight — drives the input bar's disabled state.
 final isChatSendingProvider = Provider<bool>((ref) {
   final messages = ref.watch(chatControllerProvider).valueOrNull ?? [];
   return messages.isNotEmpty && messages.last.isLoading;

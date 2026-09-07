@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../data/mock_data.dart';
 import '../../providers/standards_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/async_view.dart';
@@ -236,7 +235,7 @@ class _HomeSearchBarState extends State<_HomeSearchBar> {
         border: Border.all(color: AppTheme.cardBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -324,21 +323,21 @@ class _QuickServicesGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 10,
       mainAxisSpacing: 10,
-      childAspectRatio: 2.2,
+      childAspectRatio: 2.5,
       children: [
         _QuickServiceTile(
-          icon: Icons.search,
+          icon: Icons.verified_outlined,
           title: 'Verify HUID',
           iconBg: const Color(0xFF1E293B),
           iconColor: Colors.white,
-          onTap: () => context.go('/assistant'),
+          onTap: () => context.push('/verify?type=huid'),
         ),
         _QuickServiceTile(
-          icon: Icons.check_circle_outline,
-          title: 'Check IS Mark',
+          icon: Icons.badge_outlined,
+          title: 'Verify License',
           iconBg: const Color(0xFF0D9488),
           iconColor: Colors.white,
-          onTap: () => context.go('/explore'),
+          onTap: () => context.push('/verify?type=license'),
         ),
         _QuickServiceTile(
           icon: Icons.grid_view_outlined,
@@ -382,9 +381,8 @@ class _QuickServiceTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
@@ -394,14 +392,17 @@ class _QuickServiceTile extends StatelessWidget {
                 ),
                 child: Icon(icon, size: 18, color: iconColor),
               ),
-              const SizedBox(height: 6),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textPrimary,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                  ),
                 ),
               ),
             ],

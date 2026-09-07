@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../routes/app_router.dart';
-import '../../theme/app_theme.dart';
+
+import '../../network/api_exception.dart';
+import '../../providers/auth_provider.dart';
+
+enum _AuthMode { login, register, verifyOtp }
 
 class AuthScreen extends ConsumerStatefulWidget {
   const AuthScreen({super.key});
@@ -11,312 +14,198 @@ class AuthScreen extends ConsumerStatefulWidget {
 }
 
 class _AuthScreenState extends ConsumerState<AuthScreen> {
-  final _emailController = TextEditingController(text: 'name@agency.gov.in');
-  final _passwordController = TextEditingController(text: '********');
+  _AuthMode _mode = _AuthMode.login;
+  bool _isSubmitting = false; // only used for register/verify — login has its own AsyncLoading
+
+  final _formKey = GlobalKey<FormState>();
+  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _otpController = TextEditingController();
 
   @override
   void dispose() {
+    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 
-  void _login() {
-    ref.read(isLoggedInProvider.notifier).state = true;
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    final notifier = ref.read(authControllerProvider.notifier);
+
+    switch (_mode) {
+      case _AuthMode.login:
+        await notifier.login(email: _emailController.text.trim(), password: _passwordController.text);
+        return; // state/error handled via ref.listen below
+
+      case _AuthMode.register:
+        setState(() => _isSubmitting = true);
+        try {
+          await notifier.register(
+            username: _usernameController.text.trim(),
+            email: _emailController.text.trim(),
+            password: _passwordController.text,
+          );
+          _showMessage('Registered! Check your email for the OTP.');
+          setState(() => _mode = _AuthMode.verifyOtp);
+        } catch (e) {
+          _showMessage(e is ApiException ? e.message : 'Registration failed. Please try again.');
+        } finally {
+          if (mounted) setState(() => _isSubmitting = false);
+        }
+        return;
+
+      case _AuthMode.verifyOtp:
+        setState(() => _isSubmitting = true);
+        try {
+          await notifier.verifyEmail(email: _emailController.text.trim(), otp: _otpController.text.trim());
+          _showMessage('Email verified — please log in.');
+          _otpController.clear();
+          setState(() => _mode = _AuthMode.login);
+        } catch (e) {
+          _showMessage(e is ApiException ? e.message : 'Verification failed. Please try again.');
+        } finally {
+          if (mounted) setState(() => _isSubmitting = false);
+        }
+        return;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authControllerProvider);
+    final isLoginLoading = _mode == _AuthMode.login && authState.isLoading;
+    final isBusy = isLoginLoading || _isSubmitting;
+
+    ref.listen(authControllerProvider, (previous, next) {
+      next.whenOrNull(
+        error: (err, st) => _showMessage(err is ApiException ? err.message : 'Something went wrong.'),
+      );
+    });
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 380),
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppTheme.cardBorder),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Govt Header
-                  const Text(
-                    'GOVT. OF INDIA',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.2,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // BIS Emblem Logo
-                  const _BisEmblemLogo(),
-                  const SizedBox(height: 20),
-
-                  // Title & Subtitle
-                  const Text(
-                    'Welcome Back',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Sign in to your BIS Sahayak account',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-
-                  // Email Address
-                  CrossLabelTextField(
-                    label: 'EMAIL ADDRESS',
-                    controller: _emailController,
-                    hint: 'name@agency.gov.in',
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Password
-                  CrossLabelTextField(
-                    label: 'PASSWORD',
-                    controller: _passwordController,
-                    hint: '••••••••',
-                    obscureText: true,
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Sign In Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: _login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryBlue,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Sign In',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(child: Divider(color: Colors.grey.shade300)),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text(
-                          'OR',
-                          style: TextStyle(fontSize: 11, color: Colors.grey.shade500, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      Expanded(child: Divider(color: Colors.grey.shade300)),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Sign in with Google
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: OutlinedButton.icon(
-                      onPressed: _login,
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.grey.shade300),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      icon: Image.network(
-                        'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg',
-                        height: 18,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.g_mobiledata, size: 22),
-                      ),
-                      label: const Text(
-                        'Sign in with Google',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-                  Text(
-                    'Authentication is restricted to authorized personnel and registered technical partners.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 11,
-                      height: 1.35,
-                      color: Colors.grey.shade500,
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-                  Divider(color: Colors.grey.shade200),
-                  const SizedBox(height: 12),
-
-                  // Footer links
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton(
-                        onPressed: () {},
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: const Text(
-                          'Trouble signing in?',
-                          style: TextStyle(fontSize: 12, color: AppTheme.primaryBlue, fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                      InkWell(
-                        onTap: () {},
-                        child: const Row(
-                          children: [
-                            Text(
-                              'Official BIS Portal',
-                              style: TextStyle(fontSize: 12, color: AppTheme.primaryBlue, fontWeight: FontWeight.w500),
-                            ),
-                            SizedBox(width: 3),
-                            Icon(Icons.open_in_new, size: 12, color: AppTheme.primaryBlue),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class CrossLabelTextField extends StatelessWidget {
-  final String label;
-  final TextEditingController controller;
-  final String hint;
-  final bool obscureText;
-  final TextInputType? keyboardType;
-
-  const CrossLabelTextField({
-    super.key,
-    required this.label,
-    required this.controller,
-    required this.hint,
-    this.obscureText = false,
-    this.keyboardType,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.5,
-            color: AppTheme.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          obscureText: obscureText,
-          keyboardType: keyboardType,
-          style: const TextStyle(fontSize: 13.5, color: AppTheme.textPrimary),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13.5),
-            filled: true,
-            fillColor: const Color(0xFFF8FAFC),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _BisEmblemLogo extends StatelessWidget {
-  const _BisEmblemLogo();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 64,
-      height: 64,
-      decoration: BoxDecoration(
-        color: AppTheme.primaryBlue,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primaryBlue.withOpacity(0.2),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Icon(Icons.verified, size: 36, color: Colors.white.withOpacity(0.95)),
-          Positioned(
-            bottom: 12,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              decoration: BoxDecoration(
-                color: AppTheme.accentSaffron,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Text(
-                'BIS',
-                style: TextStyle(
-                  fontSize: 8,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 32),
+                const Icon(Icons.verified_outlined, size: 64),
+                const SizedBox(height: 12),
+                Text('BIS Sahayak', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium),
+                Text(_subtitleFor(_mode), textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
+                const SizedBox(height: 28),
+                ..._fieldsFor(_mode),
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: isBusy ? null : _submit,
+                  child: isBusy
+                      ? const SizedBox(
+                          height: 18, width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : Text(_buttonLabelFor(_mode)),
                 ),
-              ),
+                const SizedBox(height: 12),
+                if (_mode != _AuthMode.verifyOtp)
+                  TextButton(
+                    onPressed: isBusy
+                        ? null
+                        : () => setState(() => _mode = _mode == _AuthMode.login ? _AuthMode.register : _AuthMode.login),
+                    child: Text(_mode == _AuthMode.login
+                        ? 'New here? Create an account'
+                        : 'Already have an account? Log in'),
+                  ),
+                if (_mode == _AuthMode.verifyOtp)
+                  TextButton(
+                    onPressed: isBusy ? null : () => setState(() => _mode = _AuthMode.login),
+                    child: const Text('Back to log in'),
+                  ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
+  }
+
+  String _subtitleFor(_AuthMode mode) => switch (mode) {
+        _AuthMode.login => 'Your AI guide to Indian Standards',
+        _AuthMode.register => 'Create your account',
+        _AuthMode.verifyOtp => 'Enter the OTP sent to your email',
+      };
+
+  String _buttonLabelFor(_AuthMode mode) => switch (mode) {
+        _AuthMode.login => 'Log in',
+        _AuthMode.register => 'Create account',
+        _AuthMode.verifyOtp => 'Verify email',
+      };
+
+  List<Widget> _fieldsFor(_AuthMode mode) {
+    switch (mode) {
+      case _AuthMode.login:
+        return [
+          TextFormField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(labelText: 'Email'),
+            validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _passwordController,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Password'),
+            validator: (v) => (v == null || v.isEmpty) ? 'Enter your password' : null,
+          ),
+        ];
+      case _AuthMode.register:
+        return [
+          TextFormField(
+            controller: _usernameController,
+            decoration: const InputDecoration(labelText: 'Username'),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter a username' : null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(labelText: 'Email'),
+            validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _passwordController,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Password'),
+            validator: (v) => (v == null || v.length < 6) ? 'Minimum 6 characters' : null,
+          ),
+        ];
+      case _AuthMode.verifyOtp:
+        return [
+          TextFormField(
+            controller: _emailController,
+            readOnly: true,
+            decoration: const InputDecoration(labelText: 'Email'),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _otpController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'OTP'),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter the OTP' : null,
+          ),
+        ];
+    }
   }
 }

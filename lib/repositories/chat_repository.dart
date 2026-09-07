@@ -1,15 +1,30 @@
-import '../data/mock_chat_data.dart';
+import 'package:dio/dio.dart';
 
-/// Simulates the RAG/LLM backend endpoint. Swap sendMessage's body for a
-/// real dio POST to your teammates' /chat endpoint once it's ready — keep
-/// the same return contract (markdown string with `bis://` citation links)
-/// so nothing above this layer needs to change.
+import '../config/api_config.dart';
+import '../models/chat_reply.dart';
+import '../network/api_exception.dart';
+
 class ChatRepository {
-  const ChatRepository();
+  final Dio _dio;
+  const ChatRepository(this._dio);
 
-  Future<String> sendMessage(String query) {
-    return MockChatData.generateResponse(query);
+  Future<ChatReply> sendMessage({
+    required String conversationId,
+    required String question,
+  }) async {
+    try {
+      final res = await _dio.post(ApiConfig.chat, data: {
+        'conversationId': conversationId,
+        'question': question,
+      });
+      final map = Map<String, dynamic>.from(res.data as Map);
+      final answer = (map['answer'] ?? '').toString();
+      final sources = map['sources'] is List
+          ? (map['sources'] as List).map((e) => e.toString()).toList()
+          : <String>[];
+      return ChatReply(answer: answer, sources: sources);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
   }
-
-  String get welcomeMessage => MockChatData.welcomeMessage;
 }
