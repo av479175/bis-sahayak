@@ -4,9 +4,7 @@ class ApiConfig {
   /// Everything except /health lives under /api.
   static const String baseUrl = 'https://backend-fkpu.onrender.com/api';
 
-  /// Outside /api — used only for the startup wake-up ping (Render free
-  /// tier sleeps after inactivity; pinging this early reduces the chance
-  /// the user's first real request times out).
+  /// Outside /api — used only for startup wake-up ping.
   static const String healthCheckUrl = 'https://backend-fkpu.onrender.com/health';
 
   // Auth
@@ -30,6 +28,14 @@ class ApiConfig {
   static const String verifyHuid = '/verify/huid';
   static const String verifyLicense = '/verify/license';
 
-  // Feedback — base route mounted, exact contract TBD.
-  // static const String feedback = '/feedback';
+  // BIS Centre Locator
+  static const String geocode = '/location/geocode'; // POST
+  static const String bisCentres = '/bis-centres'; // GET
+
+  // Compliance Journey
+  static const String complianceProducts = '/compliance/products'; // GET
+  static String complianceJourney(String productId) => '/compliance/journey/$productId'; // GET
+
+  // Feedback
+  static const String feedback = '/feedback'; // POST
 }

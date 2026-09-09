@@ -8,6 +8,8 @@ import '../screens/auth/auth_screen.dart';
 import '../screens/splash/splash_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/assistant/assistant_screen.dart';
+import '../screens/compliance/compliance_screen.dart';
+import '../screens/locator/locator_screen.dart';
 import '../screens/explore/explore_screen.dart';
 import '../screens/saved/saved_screen.dart';
 import '../screens/profile/profile_screen.dart';
@@ -46,9 +48,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
           GoRoute(path: '/assistant', builder: (context, state) => const AssistantScreen()),
-          GoRoute(path: '/explore', builder: (context, state) => const ExploreScreen()),
+          GoRoute(path: '/compliance', builder: (context, state) => const ComplianceScreen()),
+          GoRoute(path: '/locator', builder: (context, state) => const LocatorScreen()),
           GoRoute(path: '/saved', builder: (context, state) => const SavedScreen()),
           GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
+          GoRoute(path: '/explore', builder: (context, state) => const ExploreScreen()),
         ],
       ),
       GoRoute(

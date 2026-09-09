@@ -100,8 +100,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 32),
-                const Icon(Icons.verified_outlined, size: 64),
+                const SizedBox(height: 24),
+                Center(
+                  child: Image.asset('assets/images/app_logo.png', height: 80),
+                ),
                 const SizedBox(height: 12),
                 Text('BIS Sahayak', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium),
                 Text(_subtitleFor(_mode), textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),

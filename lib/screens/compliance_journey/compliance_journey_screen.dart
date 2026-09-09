@@ -39,14 +39,7 @@ class _JourneyAppBar extends StatelessWidget {
       titleSpacing: 16,
       title: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: AppTheme.primaryBlue,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.verified, size: 16, color: Colors.white),
-          ),
+          Image.asset('assets/images/app_logo.png', height: 28),
           const SizedBox(width: 8),
           const Text(
             'BIS Sahayak',

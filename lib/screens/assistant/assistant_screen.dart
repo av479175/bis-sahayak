@@ -159,11 +159,11 @@ class _ChatHistoryDrawer extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.auto_awesome, color: AppTheme.primaryBlue, size: 22),
-                      SizedBox(width: 8),
-                      Text(
+                      Image.asset('assets/images/app_logo.png', height: 26),
+                      const SizedBox(width: 8),
+                      const Text(
                         'BIS Sahayak AI',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
                       ),

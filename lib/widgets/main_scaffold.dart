@@ -9,9 +9,9 @@ class MainScaffold extends StatelessWidget {
 
   static const _tabs = [
     _NavTab(path: '/home', icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home'),
-    _NavTab(path: '/assistant', icon: Icons.chat_bubble_outline, activeIcon: Icons.chat_bubble, label: 'Assistant'),
-    _NavTab(path: '/explore', icon: Icons.explore_outlined, activeIcon: Icons.explore, label: 'Explore'),
-    _NavTab(path: '/saved', icon: Icons.bookmark_border, activeIcon: Icons.bookmark, label: 'Saved'),
+    _NavTab(path: '/assistant', icon: Icons.auto_awesome_outlined, activeIcon: Icons.auto_awesome, label: 'Assistant'),
+    _NavTab(path: '/compliance', icon: Icons.track_changes_outlined, activeIcon: Icons.track_changes, label: 'Compliance'),
+    _NavTab(path: '/locator', icon: Icons.location_on_outlined, activeIcon: Icons.location_on, label: 'Locator'),
     _NavTab(path: '/profile', icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile'),
   ];
 

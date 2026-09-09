@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/chat_message.dart';
+import '../providers/feedback_provider.dart';
 import '../theme/app_theme.dart';
 import 'citation_chip.dart';
 
@@ -114,7 +116,80 @@ class ChatBubble extends StatelessWidget {
             children: message.sources.map((s) => _SourceChip(source: s)).toList(),
           ),
         ],
+        _FeedbackButtons(message: message),
       ],
+    );
+  }
+}
+
+class _FeedbackButtons extends ConsumerStatefulWidget {
+  final ChatMessage message;
+
+  const _FeedbackButtons({required this.message});
+
+  @override
+  ConsumerState<_FeedbackButtons> createState() => _FeedbackButtonsState();
+}
+
+class _FeedbackButtonsState extends ConsumerState<_FeedbackButtons> {
+  String? _selectedRating;
+
+  void _onFeedback(String rating) async {
+    setState(() => _selectedRating = rating);
+    final success = await ref.read(feedbackNotifierProvider.notifier).sendFeedback(
+          rating: rating,
+          messageId: widget.message.id,
+          answer: widget.message.text,
+        );
+    if (mounted && success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Feedback recorded. Thank you!'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Text(
+            'Was this helpful?',
+            style: TextStyle(fontSize: 10.5, color: Colors.grey.shade500),
+          ),
+          const SizedBox(width: 6),
+          InkWell(
+            onTap: () => _onFeedback('helpful'),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(
+                _selectedRating == 'helpful' ? Icons.thumb_up : Icons.thumb_up_outlined,
+                size: 14,
+                color: _selectedRating == 'helpful' ? AppTheme.emeraldGreen : Colors.grey.shade600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          InkWell(
+            onTap: () => _onFeedback('not_helpful'),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(
+                _selectedRating == 'not_helpful' ? Icons.thumb_down : Icons.thumb_down_outlined,
+                size: 14,
+                color: _selectedRating == 'not_helpful' ? Colors.red.shade700 : Colors.grey.shade600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -236,3 +311,5 @@ class _TypingIndicatorState extends State<_TypingIndicator>
     );
   }
 }
+
+

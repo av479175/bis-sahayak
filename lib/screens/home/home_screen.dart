@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../providers/auth_provider.dart';
 import '../../providers/standards_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/async_view.dart';
@@ -13,6 +14,10 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recentActivityAsync = ref.watch(recentActivityProvider);
+    final user = ref.watch(authControllerProvider).valueOrNull;
+    final username = (user != null && user.username.trim().isNotEmpty)
+        ? user.username.trim()
+        : 'User';
 
     return Scaffold(
       appBar: PreferredSize(
@@ -24,9 +29,9 @@ class HomeScreen extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
             // Greeting Header
-            const Text(
-              'Namaste!',
-              style: TextStyle(
+            Text(
+              'Hi, $username',
+              style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
                 color: AppTheme.textPrimary,
@@ -51,7 +56,7 @@ class HomeScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 10),
 
-            // Search Suggestion Chips ("Try: Process for ISI Mark", etc.)
+            // Search Suggestion Chips
             Row(
               children: [
                 Text(
@@ -70,8 +75,13 @@ class HomeScreen extends ConsumerWidget {
                         ),
                         const SizedBox(width: 6),
                         _SearchSuggestionChip(
-                          label: 'Find standard for Cement',
-                          onTap: () => context.go('/explore'),
+                          label: 'Verify Gold HUID',
+                          onTap: () => context.push('/verify?type=huid'),
+                        ),
+                        const SizedBox(width: 6),
+                        _SearchSuggestionChip(
+                          label: 'Check BIS License',
+                          onTap: () => context.push('/verify?type=license'),
                         ),
                       ],
                     ),
@@ -79,7 +89,11 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
+
+            // Quick Homepage Verification Section
+            const _HomeQuickVerifyCard(),
+            const SizedBox(height: 20),
 
             // Quick Services Section
             const Text(
@@ -150,6 +164,101 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
+class _HomeQuickVerifyCard extends ConsumerStatefulWidget {
+  const _HomeQuickVerifyCard();
+
+  @override
+  ConsumerState<_HomeQuickVerifyCard> createState() => _HomeQuickVerifyCardState();
+}
+
+class _HomeQuickVerifyCardState extends ConsumerState<_HomeQuickVerifyCard> {
+  final _controller = TextEditingController();
+  bool _isHuid = true;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _verify() {
+    if (_isHuid) {
+      context.push('/verify?type=huid');
+    } else {
+      context.push('/verify?type=license');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(_isHuid ? Icons.verified_outlined : Icons.badge_outlined, color: AppTheme.primaryBlue, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      _isHuid ? 'Quick HUID Verification' : 'Quick BIS License Check',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                    ),
+                  ],
+                ),
+                TextButton(
+                  onPressed: () => setState(() => _isHuid = !_isHuid),
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    _isHuid ? 'Switch to License' : 'Switch to HUID',
+                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    textCapitalization: TextCapitalization.characters,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: _isHuid ? 'Enter 6-digit HUID (e.g. A8F2X9)' : 'Enter License No. (e.g. CM/L-1234567)',
+                      hintStyle: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _verify,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTheme.primaryBlue,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('Verify', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _HomeTopAppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -157,19 +266,12 @@ class _HomeTopAppBar extends StatelessWidget {
       titleSpacing: 16,
       title: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: AppTheme.primaryBlue,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.verified, size: 16, color: Colors.white),
-          ),
-          const SizedBox(width: 8),
+          Image.asset('assets/images/app_logo.png', height: 32),
+          const SizedBox(width: 10),
           const Text(
             'BIS Sahayak',
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 17,
               fontWeight: FontWeight.w800,
               color: AppTheme.textPrimary,
             ),
@@ -340,18 +442,18 @@ class _QuickServicesGrid extends StatelessWidget {
           onTap: () => context.push('/verify?type=license'),
         ),
         _QuickServiceTile(
-          icon: Icons.grid_view_outlined,
-          title: 'Product Finder',
+          icon: Icons.track_changes_outlined,
+          title: 'Compliance',
           iconBg: const Color(0xFF1E293B),
           iconColor: Colors.white,
-          onTap: () => context.push('/compliance-journey/led-lighting'),
+          onTap: () => context.go('/compliance'),
         ),
         _QuickServiceTile(
-          icon: Icons.workspace_premium_outlined,
-          title: 'Cert Help',
+          icon: Icons.location_on_outlined,
+          title: 'Centre Locator',
           iconBg: const Color(0xFF06B6D4),
           iconColor: Colors.white,
-          onTap: () => context.go('/assistant'),
+          onTap: () => context.go('/locator'),
         ),
       ],
     );
@@ -419,20 +521,20 @@ class _FigmaNewsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      children: [
+      children: const [
         _NewsCardItem(
           badgeLabel: 'New Amendment',
-          badgeColor: const Color(0xFF10893E),
-          badgeBg: const Color(0xFFE7F5E9),
+          badgeColor: Color(0xFF10893E),
+          badgeBg: Color(0xFFE7F5E9),
           title: 'Amendment 2 to IS 302 (Part 1) : 2008',
           subtitle: 'Safety of Household Electrical Appliances',
           dateText: 'Effective: 15 Oct 2023',
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: 10),
         _NewsCardItem(
           badgeLabel: 'Announcement',
           badgeColor: AppTheme.primaryBlue,
-          badgeBg: const Color(0xFFE7F0F9),
+          badgeBg: Color(0xFFE7F0F9),
           title: 'Extension of Implementation Date for QCO on Footwear made from Leather',
           subtitle: 'Ministry of Commerce & Industry Notification',
           dateText: 'Effective: 01 Nov 2023',
